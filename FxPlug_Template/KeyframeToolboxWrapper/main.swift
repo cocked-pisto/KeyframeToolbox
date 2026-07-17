@@ -58,7 +58,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Motion Publish 효과는 FxPlug 앱과 별도로 Movies/Motion Templates에 있어야
-    /// Final Cut Pro 효과 브라우저에 표시된다. 기존 사용자 템플릿은 덮어쓰지 않는다.
+    /// Final Cut Pro 효과 브라우저에 표시된다. 이 앱 전용 카테고리는 매번 최신
+    /// 발행본으로 교체해, 오래된 템플릿과 새 FxPlug 엔진이 엇갈리지 않게 한다.
     private static func installMotionTemplate() throws {
         guard let resourceURL = Bundle.main.resourceURL,
               let moviesURL = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first else {
@@ -66,13 +67,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                           userInfo: [NSLocalizedDescriptionKey: "Motion 템플릿 설치 경로를 찾지 못했습니다."])
         }
 
-        let source = resourceURL
-            .appendingPathComponent("Motion Templates.localized")
-            .appendingPathComponent("Effects.localized")
-            .appendingPathComponent("Keyframe Toolbox")
+        let source = resourceURL.appendingPathComponent("KeyframeToolboxMotionTemplate.zip")
         guard FileManager.default.fileExists(atPath: source.path) else {
             throw NSError(domain: "KeyframeToolbox", code: 2,
-                          userInfo: [NSLocalizedDescriptionKey: "번들에 Motion 효과 템플릿이 없습니다."])
+                          userInfo: [NSLocalizedDescriptionKey: "번들에 Motion 효과 템플릿 아카이브가 없습니다."])
         }
 
         let destinationParent = moviesURL
@@ -81,9 +79,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let destination = destinationParent.appendingPathComponent("Keyframe Toolbox")
         try FileManager.default.createDirectory(at: destinationParent,
                                                 withIntermediateDirectories: true)
-        if !FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.copyItem(at: source, to: destination)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            // Keyframe Toolbox는 이 설치기가 소유하는 전용 카테고리다.
+            // 이전 배포본의 .moef를 제거한 뒤 같은 경로에 최신 발행본을 복사한다.
+            try FileManager.default.removeItem(at: destination)
         }
+        // ZIP 안의 Finder 타입/확장 속성을 보존해 .moef를 Motion effect로 설치한다.
+        let status = try runDitto(archive: source, destination: destinationParent)
+        guard status == 0 else {
+            throw NSError(domain: "KeyframeToolbox", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "Motion 효과 템플릿 복사에 실패했습니다."])
+        }
+    }
+
+    private static func runDitto(archive: URL, destination: URL) throws -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        // 앱 다운로드에 붙은 quarantine은 템플릿에 전달하지 않고, Motion 메타데이터만 보존한다.
+        process.arguments = ["-x", "-k", "--rsrc", "--extattr", "--noqtn", archive.path, destination.path]
+        try process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
     }
 
     private func updateInstallState(_ message: String, success: Bool) {

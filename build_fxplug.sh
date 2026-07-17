@@ -62,15 +62,15 @@ cp FxPlug_Template/KeyframeToolboxExtension/Info.plist "$APP_NAME/Contents/PlugI
 echo "🌐 로컬라이징 리소스(en.lproj) 복사..."
 cp -R FxPlug_Template/KeyframeToolboxExtension/en.lproj "$APP_NAME/Contents/PlugIns/$EXTENSION_NAME/Contents/Resources/"
 
-# Motion에서 발행한 효과 템플릿도 래퍼 앱에 함께 넣는다.
-# 일반 사용자는 앱을 한 번 열기만 하면 이 템플릿이 Movies/Motion Templates에 자동 설치된다.
-MOTION_TEMPLATE_SOURCE="MotionTemplates/Motion Templates.localized"
-if [ ! -d "$MOTION_TEMPLATE_SOURCE" ]; then
+# Motion 템플릿은 Finder 타입/확장 속성을 직접 앱 번들에 넣으면 codesign이 거부한다.
+# 그래서 메타데이터를 보존한 ZIP을 Resources에 넣고, 래퍼가 설치 시 ditto로 푼다.
+MOTION_TEMPLATE_ARCHIVE="MotionTemplates/KeyframeToolboxMotionTemplate.zip"
+if [ ! -f "$MOTION_TEMPLATE_ARCHIVE" ]; then
     echo "❌ 에러: 발행된 Motion 효과 템플릿을 찾지 못했습니다."
     exit 1
 fi
-echo "🎬 발행된 Motion 효과 템플릿 복사..."
-cp -R "$MOTION_TEMPLATE_SOURCE" "$APP_NAME/Contents/Resources/"
+echo "🎬 발행된 Motion 효과 템플릿 아카이브 복사..."
+cp "$MOTION_TEMPLATE_ARCHIVE" "$APP_NAME/Contents/Resources/KeyframeToolboxMotionTemplate.zip"
 
 # 4. macOS 보안 정책에 따른 Ad-hoc 코드 서명 진행 (필수 - Hardened Runtime 활성화)
 echo "🔑 macOS 보안을 위한 로컬 코드 서명(Codesign) 진행..."
