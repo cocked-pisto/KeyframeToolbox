@@ -289,8 +289,8 @@ struct TrackSet: Codable {
             scale: .makeDefault(name: "Scale", minValue: 0.0, maxValue: 4.0, value: 1.0),
             // Position은 픽셀이 아니라 캔버스 크기에 비례하는 가상 단위다.
             // 100 = 현재 프레임 가로/세로 길이 한 번만큼 이동한다.
-            positionX: .makeDefault(name: "Position X", minValue: -10000.0, maxValue: 10000.0, value: 0.0),
-            positionY: .makeDefault(name: "Position Y", minValue: -10000.0, maxValue: 10000.0, value: 0.0),
+            positionX: .makeDefault(name: "Position X", minValue: -500.0, maxValue: 500.0, value: 0.0),
+            positionY: .makeDefault(name: "Position Y", minValue: -500.0, maxValue: 500.0, value: 0.0),
             opacity: .makeDefault(name: "Opacity", minValue: 0.0, maxValue: 1.0, value: 1.0),
             rotationZ: .makeDefault(name: "Rotation Z", minValue: -360.0, maxValue: 360.0, value: 0.0),
             rotationY: .makeDefault(name: "Rotation Y", minValue: -85.0, maxValue: 85.0, value: 0.0),
@@ -355,16 +355,16 @@ struct TrackSet: Codable {
         if let scale = try c.decodeIfPresent(KeyframeTrack.self, forKey: .scale) {
             self.scale = scale
             self.positionX = try c.decodeIfPresent(KeyframeTrack.self, forKey: .positionX)
-                ?? .makeDefault(name: "Position X", minValue: -10000, maxValue: 10000, value: 0)
+                ?? .makeDefault(name: "Position X", minValue: -500, maxValue: 500, value: 0)
             self.positionY = try c.decodeIfPresent(KeyframeTrack.self, forKey: .positionY)
-                ?? .makeDefault(name: "Position Y", minValue: -10000, maxValue: 10000, value: 0)
+                ?? .makeDefault(name: "Position Y", minValue: -500, maxValue: 500, value: 0)
         } else {
             // 이전 Scale X/Y 프로젝트는 X를 균일 Scale 값으로 이어받는다.
             self.scale = try c.decodeIfPresent(KeyframeTrack.self, forKey: .scaleX)
                 ?? .makeDefault(name: "Scale", minValue: 0, maxValue: 4, value: 1)
             self.scale.name = "Scale"
-            self.positionX = .makeDefault(name: "Position X", minValue: -10000, maxValue: 10000, value: 0)
-            self.positionY = .makeDefault(name: "Position Y", minValue: -10000, maxValue: 10000, value: 0)
+            self.positionX = .makeDefault(name: "Position X", minValue: -500, maxValue: 500, value: 0)
+            self.positionY = .makeDefault(name: "Position Y", minValue: -500, maxValue: 500, value: 0)
         }
         opacity = try c.decodeIfPresent(KeyframeTrack.self, forKey: .opacity)
             ?? .makeDefault(name: "Opacity", minValue: 0, maxValue: 1, value: 1)
@@ -378,6 +378,10 @@ struct TrackSet: Codable {
             ?? .makeDefault(name: "Blur", minValue: 0, maxValue: 200, value: 0)
         enabledProperties = try c.decodeIfPresent(EnabledProperties.self, forKey: .enabledProperties) ?? EnabledProperties()
         timeDomain = try c.decodeIfPresent(TrackTimeDomain.self, forKey: .timeDomain)
+        // 초기 개발본의 ±10000 범위는 실제 편집에 지나치게 넓었다.
+        // 기존 프로젝트도 로드 즉시 같은 ±500 가상 단위 범위로 정리한다.
+        positionX = Self.normalizedPositionTrack(positionX, name: "Position X")
+        positionY = Self.normalizedPositionTrack(positionY, name: "Position Y")
     }
 
     func encode(to encoder: Encoder) throws {
@@ -398,5 +402,16 @@ struct TrackSet: Codable {
         guard let data, !data.isEmpty,
               let set = try? JSONDecoder().decode(TrackSet.self, from: data) else { return .makeDefault() }
         return set
+    }
+
+    private static func normalizedPositionTrack(_ source: KeyframeTrack, name: String) -> KeyframeTrack {
+        var track = source
+        track.name = name
+        track.minValue = -500
+        track.maxValue = 500
+        track.keyframes.indices.forEach { index in
+            track.keyframes[index].value = min(max(track.keyframes[index].value, -500), 500)
+        }
+        return track
     }
 }

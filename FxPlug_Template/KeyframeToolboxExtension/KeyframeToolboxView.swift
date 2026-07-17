@@ -900,6 +900,13 @@ private struct TrackEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.center)
                 .disabled(activeSelectedKeyframeID == nil)
+                // 숫자를 입력한 뒤 다른 곳을 클릭할 필요 없이 Return으로 즉시 확정한다.
+                .onSubmit {
+                    onCommit()
+                    DispatchQueue.main.async {
+                        NSApp.keyWindow?.makeFirstResponder(nil)
+                    }
+                }
             Spacer(minLength: 0)
             Text(valueText((range.lowerBound + range.upperBound) / 2))
                 .foregroundColor(.secondary)

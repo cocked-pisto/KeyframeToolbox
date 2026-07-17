@@ -2,7 +2,7 @@
 
 이 문서는 Xcode, FxPlug SDK, 터미널 없이 플러그인을 설치하는 방법입니다.
 
-1. GitHub의 **Releases** 페이지에서 `KeyframeToolboxV6-1.0.0-macos.zip`을 다운로드합니다.
+1. GitHub의 **Releases** 페이지에서 가장 최신 버전의 macOS ZIP을 다운로드합니다.
 2. ZIP 파일을 압축 해제합니다.
 3. `KeyframeToolboxV6.app`을 **응용 프로그램(Applications)** 폴더로 옮깁니다.
 4. 응용 프로그램 폴더에서 `KeyframeToolboxV6`를 한 번 실행합니다. 이 앱은 FxPlug 확장을 macOS에 등록하는 설치용 래퍼입니다.

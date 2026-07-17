@@ -31,7 +31,7 @@ Final Cut Pro 기본 키프레임 편집을 대체하는 그래프 기반 워크
 
 ## 요구 사항
 
-- macOS
+- macOS 15 Sequoia 이상 (Intel / Apple Silicon)
 - Final Cut Pro 또는 Motion
 - Xcode Command Line Tools
 - [FxPlug SDK](https://developer.apple.com/download/) — `/Library/Developer/SDKs/FxPlug.sdk`에 설치

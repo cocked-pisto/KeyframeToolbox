@@ -5,6 +5,8 @@ echo "🚀 FxPlug 4.0 파이널컷 프로 플러그인 패키지 빌드 시작..
 # 1. 빌드 폴더 준비 및 구조 설계
 APP_NAME="KeyframeToolboxV6.app"
 EXTENSION_NAME="KeyframeToolboxExtension.pluginkit"
+MINIMUM_MACOS="15.0" # macOS Sequoia
+ARCHITECTURES=("arm64" "x86_64")
 
 rm -rf "$APP_NAME"
 
@@ -24,31 +26,31 @@ if [ ! -d "$FXPLUG_SDK" ]; then
 fi
 
 echo "⚙️  1단계: App Extension (플러그인 로직) 컴파일..."
-swiftc -sdk "$SDK_PATH" \
-    -F "$FXPLUG_SDK/Library/Frameworks" \
-    -I modules_map \
-    -framework FxPlug -framework SwiftUI -framework AppKit \
-    -Xlinker -rpath -Xlinker "/Applications/Final Cut Pro.app/Contents/Frameworks" \
-    -Xlinker -rpath -Xlinker "@loader_path/../Frameworks" \
-    FxPlug_Template/KeyframeToolboxExtension/*.swift \
-    -o "$APP_NAME/Contents/PlugIns/$EXTENSION_NAME/Contents/MacOS/KeyframeToolboxExtension"
-
-if [ $? -ne 0 ]; then
-    echo "❌ 에러: 플러그인 Extension 컴파일 실패"
-    exit 1
-fi
+EXTENSION_BINARY="$APP_NAME/Contents/PlugIns/$EXTENSION_NAME/Contents/MacOS/KeyframeToolboxExtension"
+for ARCH in "${ARCHITECTURES[@]}"; do
+    swiftc -target "$ARCH-apple-macos$MINIMUM_MACOS" -sdk "$SDK_PATH" \
+        -F "$FXPLUG_SDK/Library/Frameworks" \
+        -I modules_map \
+        -framework FxPlug -framework SwiftUI -framework AppKit \
+        -Xlinker -rpath -Xlinker "/Applications/Final Cut Pro.app/Contents/Frameworks" \
+        -Xlinker -rpath -Xlinker "@loader_path/../Frameworks" \
+        FxPlug_Template/KeyframeToolboxExtension/*.swift \
+        -o "$EXTENSION_BINARY.$ARCH" || exit 1
+done
+lipo -create "$EXTENSION_BINARY.arm64" "$EXTENSION_BINARY.x86_64" -output "$EXTENSION_BINARY"
+rm "$EXTENSION_BINARY.arm64" "$EXTENSION_BINARY.x86_64"
 
 echo "⚙️  2단계: Wrapper Application (시스템 등록 래퍼 앱) 컴파일..."
-swiftc -sdk "$SDK_PATH" \
-    -framework SwiftUI -framework AppKit \
-    -parse-as-library \
-    FxPlug_Template/KeyframeToolboxWrapper/main.swift \
-    -o "$APP_NAME/Contents/MacOS/KeyframeToolbox"
-
-if [ $? -ne 0 ]; then
-    echo "❌ 에러: Wrapper App 컴파일 실패"
-    exit 1
-fi
+WRAPPER_BINARY="$APP_NAME/Contents/MacOS/KeyframeToolbox"
+for ARCH in "${ARCHITECTURES[@]}"; do
+    swiftc -target "$ARCH-apple-macos$MINIMUM_MACOS" -sdk "$SDK_PATH" \
+        -framework SwiftUI -framework AppKit \
+        -parse-as-library \
+        FxPlug_Template/KeyframeToolboxWrapper/main.swift \
+        -o "$WRAPPER_BINARY.$ARCH" || exit 1
+done
+lipo -create "$WRAPPER_BINARY.arm64" "$WRAPPER_BINARY.x86_64" -output "$WRAPPER_BINARY"
+rm "$WRAPPER_BINARY.arm64" "$WRAPPER_BINARY.x86_64"
 
 # 3. 설정 설정파일(Info.plist) 삽입
 echo "📝 설정 정보(Info.plist) 복사..."
