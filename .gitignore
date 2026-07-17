@@ -1,0 +1,21 @@
+# macOS / editor
+.DS_Store
+.claude/
+
+# Local build products and experimental executables
+KeyframeToolboxV6.app/
+GraphEditorApp
+test_ext
+test_ext_exe
+old_apps_backup.zip
+
+# Old prototypes and local backup copies
+src/
+build.sh
+build_fxplug.sh.bak
+*.bak
+*.bak2
+
+# Swift build artifacts
+.build/
+DerivedData/

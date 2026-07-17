@@ -1,0 +1,4 @@
+module FxPlug {
+    umbrella header "/Library/Developer/SDKs/FxPlug.sdk/Library/Frameworks/FxPlug.framework/Versions/A/Headers/FxPlugSDK.h"
+    export *
+}
