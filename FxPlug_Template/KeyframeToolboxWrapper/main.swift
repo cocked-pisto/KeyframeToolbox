@@ -1,37 +1,92 @@
 import Cocoa
 import SwiftUI
 
+/// 일반 사용자가 앱을 한 번 여는 것만으로 FxPlug 확장을 등록하도록 하는 설치 상태.
+final class PluginInstallState: ObservableObject {
+    @Published var message = "플러그인을 macOS에 등록하고 있습니다…"
+    @Published var isSuccess = false
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
+    let installState = PluginInstallState()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        registerPluginExtension()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return true
+        true
+    }
+
+    /// build_fxplug.sh에서만 하던 PlugInKit 등록을 배포 앱에서도 실행한다.
+    /// 따라서 사용자는 터미널 없이 Applications 폴더에 앱을 넣고 한 번 열면 된다.
+    private func registerPluginExtension() {
+        let extensionURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/PlugIns/KeyframeToolboxExtension.pluginkit")
+        let identifier = "com.user.KeyframeToolboxV6.KeyframeToolboxExtension"
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard FileManager.default.fileExists(atPath: extensionURL.path) else {
+                self?.updateInstallState("플러그인 파일을 찾지 못했습니다. 앱을 다시 다운로드해 주세요.", success: false)
+                return
+            }
+
+            do {
+                let addStatus = try Self.runPluginKit(arguments: ["-a", extensionURL.path])
+                let enableStatus = try Self.runPluginKit(arguments: ["-e", "use", "-i", identifier])
+                guard addStatus == 0, enableStatus == 0 else {
+                    self?.updateInstallState("등록에 실패했습니다. 앱을 Applications 폴더로 옮긴 뒤 다시 열어 주세요.", success: false)
+                    return
+                }
+                self?.updateInstallState("등록 완료 — Final Cut Pro/Motion을 완전히 종료 후 다시 실행하세요.", success: true)
+            } catch {
+                self?.updateInstallState("등록에 실패했습니다: \(error.localizedDescription)", success: false)
+            }
+        }
+    }
+
+    private static func runPluginKit(arguments: [String]) throws -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pluginkit")
+        process.arguments = arguments
+        try process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
+    }
+
+    private func updateInstallState(_ message: String, success: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            self?.installState.message = message
+            self?.installState.isSuccess = success
+        }
     }
 }
 
 struct WrapperView: View {
+    @ObservedObject var installState: PluginInstallState
+
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "bolt.fill")
                 .font(.system(size: 60))
-                .foregroundColor(.orange)
-            Text("키프레임 서드파티 플러그인 래퍼")
+                .foregroundColor(installState.isSuccess ? .green : .orange)
+            Text("키프레임 서드파티 플러그인")
                 .font(.title2)
                 .bold()
                 .foregroundColor(.white)
-            Text("이 앱은 파이널컷 프로(FCP) 플러그인을 macOS 시스템에\n자동 등록하기 위한 래퍼 프로그램입니다.")
+            Text("이 앱은 Final Cut Pro/Motion용 FxPlug 확장을\nmacOS에 자동 등록합니다.")
                 .font(.system(size: 13))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
-            Text("상태: 플러그인이 정상 등록되었습니다.")
+            Text(installState.message)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.green)
+                .foregroundColor(installState.isSuccess ? .green : .orange)
+                .multilineTextAlignment(.center)
         }
         .padding(30)
-        .frame(width: 400, height: 280)
+        .frame(width: 420, height: 280)
         .background(Color(red: 0.1, green: 0.1, blue: 0.1))
     }
 }
@@ -39,9 +94,10 @@ struct WrapperView: View {
 @main
 struct WrapperApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
         WindowGroup {
-            WrapperView()
+            WrapperView(installState: appDelegate.installState)
                 .preferredColorScheme(.dark)
         }
     }
