@@ -40,6 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.updateInstallState("등록에 실패했습니다. 앱을 Applications 폴더로 옮긴 뒤 다시 열어 주세요.", success: false)
                     return
                 }
+                try Self.installMotionTemplate()
                 self?.updateInstallState("등록 완료 — Final Cut Pro/Motion을 완전히 종료 후 다시 실행하세요.", success: true)
             } catch {
                 self?.updateInstallState("등록에 실패했습니다: \(error.localizedDescription)", success: false)
@@ -54,6 +55,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         try process.run()
         process.waitUntilExit()
         return process.terminationStatus
+    }
+
+    /// Motion Publish 효과는 FxPlug 앱과 별도로 Movies/Motion Templates에 있어야
+    /// Final Cut Pro 효과 브라우저에 표시된다. 기존 사용자 템플릿은 덮어쓰지 않는다.
+    private static func installMotionTemplate() throws {
+        guard let resourceURL = Bundle.main.resourceURL,
+              let moviesURL = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first else {
+            throw NSError(domain: "KeyframeToolbox", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Motion 템플릿 설치 경로를 찾지 못했습니다."])
+        }
+
+        let source = resourceURL
+            .appendingPathComponent("Motion Templates.localized")
+            .appendingPathComponent("Effects.localized")
+            .appendingPathComponent("Keyframe Toolbox")
+        guard FileManager.default.fileExists(atPath: source.path) else {
+            throw NSError(domain: "KeyframeToolbox", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "번들에 Motion 효과 템플릿이 없습니다."])
+        }
+
+        let destinationParent = moviesURL
+            .appendingPathComponent("Motion Templates.localized")
+            .appendingPathComponent("Effects.localized")
+        let destination = destinationParent.appendingPathComponent("Keyframe Toolbox")
+        try FileManager.default.createDirectory(at: destinationParent,
+                                                withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.copyItem(at: source, to: destination)
+        }
     }
 
     private func updateInstallState(_ message: String, success: Bool) {

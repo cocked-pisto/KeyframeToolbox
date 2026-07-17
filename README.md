@@ -38,7 +38,7 @@ Final Cut Pro 기본 키프레임 편집을 대체하는 그래프 기반 워크
 
 ## 빌드 및 설치
 
-일반 사용자는 [INSTALL.md](INSTALL.md)를 따라 Release ZIP을 설치하면 됩니다. Xcode나 FxPlug SDK가 필요 없습니다.
+일반 사용자는 [INSTALL.md](INSTALL.md)를 따라 Release ZIP을 설치하면 됩니다. Xcode나 FxPlug SDK, Motion은 필요 없습니다. 래퍼 앱이 FxPlug 엔진과 Motion Publish 효과 템플릿을 함께 설치합니다.
 
 소스에서 직접 빌드하려면:
 
