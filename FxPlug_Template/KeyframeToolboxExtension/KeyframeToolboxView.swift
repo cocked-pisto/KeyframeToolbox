@@ -330,6 +330,9 @@ private struct TrackEditor: View {
     @State private var createdKeyframeInGesture = false
     @State private var beganGraphGesture = false
     @State private var blankTapTime: Double?
+    /// 드래그 중에는 자동 축척을 잠시 고정·확장한다. 그래프 끝까지 끌었을 때
+    /// 마우스를 놓고 다시 잡지 않아도 계속 큰 값을 만들 수 있게 하는 용도다.
+    @State private var dragDisplayRange: ClosedRange<Double>?
     private var activeSelectedKeyframeID: UUID? {
         selectedKeyframeIDs.count == 1 ? selectedKeyframeIDs.first : nil
     }
@@ -418,9 +421,14 @@ private struct TrackEditor: View {
     /// 키프레임 값 주변만 확대해서 보여준다. 값 차이가 작으면 더 좁은 범위를 쓰므로
     /// 작은 변화도 세밀하게 조절할 수 있고, 값 차이가 커지면 자동으로 범위가 넓어진다.
     private var displayRange: ClosedRange<Double> {
+        dragDisplayRange ?? automaticDisplayRange
+    }
+
+    /// 실제 키프레임 데이터에서 계산한 기본 표시 범위.
+    private var automaticDisplayRange: ClosedRange<Double> {
         let values = track.keyframes.map(\.value)
         guard let low = values.min(), let high = values.max() else {
-            return track.minValue...track.maxValue
+            return initialRange(around: defaultValue)
         }
 
         let span = max(high - low, 0.1)
@@ -428,8 +436,10 @@ private struct TrackEditor: View {
         var lower = max(track.minValue, low - padding)
         var upper = min(track.maxValue, high + padding)
 
-        // 값이 동일한 기본 상태에서도 5% 단위 조절이 가능하도록 최소 시야를 확보한다.
-        let minimumVisibleSpan = 0.2
+        // 시작/끝 점만 있는 첫 상태에서는 100% 근처를 너무 과하게 확대하지 않는다.
+        // 예: Scale 100%는 우선 80~120%로 보여서 한 번의 드래그로 변화가 체감된다.
+        // 속성값이 벌어지면 위의 데이터 기반 span이 자동으로 이 범위를 대신한다.
+        let minimumVisibleSpan = initialVisibleSpan
         if upper - lower < minimumVisibleSpan {
             let center = (low + high) / 2
             lower = max(track.minValue, center - minimumVisibleSpan / 2)
@@ -440,6 +450,54 @@ private struct TrackEditor: View {
             }
         }
         return lower...upper
+    }
+
+    private var defaultValue: Double {
+        track.keyframes.first?.value ?? 0
+    }
+
+    /// 속성마다 첫 조작에 적당한 시야를 준다. Position은 가상 단위, Scale/Opacity는 내부 0~1 값이다.
+    private var initialVisibleSpan: Double {
+        switch track.name {
+        case "Scale": return 0.4       // 100% 기준 약 80~120%
+        case "Opacity": return 0.4
+        case "Position X", "Position Y": return 40
+        case "Rotation Z", "Rotation X", "Rotation Y": return 60
+        case "Blur": return 20
+        default: return max((track.maxValue - track.minValue) * 0.1, 0.1)
+        }
+    }
+
+    private func initialRange(around center: Double) -> ClosedRange<Double> {
+        let half = initialVisibleSpan / 2
+        var lower = max(track.minValue, center - half)
+        var upper = min(track.maxValue, center + half)
+        if upper - lower < initialVisibleSpan {
+            if lower <= track.minValue { upper = min(track.maxValue, lower + initialVisibleSpan) }
+            if upper >= track.maxValue { lower = max(track.minValue, upper - initialVisibleSpan) }
+        }
+        return lower...upper
+    }
+
+    /// 포인터가 상·하단에 닿으면 현재 표시 폭을 넓힌 뒤 그 새 범위로 값을 계산한다.
+    /// 따라서 120%에 닿아도 마우스를 놓지 않고 150%, 200% 이상으로 이어서 올릴 수 있다.
+    private func valueForActiveDrag(at y: CGFloat, size: CGSize) -> Double {
+        guard size.height > 0 else { return track.minValue }
+        var range = dragDisplayRange ?? automaticDisplayRange
+        let edge: CGFloat = 10
+        let span = range.upperBound - range.lowerBound
+        let expansion = max(span * 0.75, initialVisibleSpan * 0.5)
+
+        if y <= edge, range.upperBound < track.maxValue {
+            range = range.lowerBound...min(track.maxValue, range.upperBound + expansion)
+        } else if y >= size.height - edge, range.lowerBound > track.minValue {
+            range = max(track.minValue, range.lowerBound - expansion)...range.upperBound
+        }
+        dragDisplayRange = range
+
+        let ratio = 1.0 - Double(min(max(y, 0), size.height) / size.height)
+        return min(max(range.lowerBound + ratio * (range.upperBound - range.lowerBound),
+                       track.minValue), track.maxValue)
     }
 
     // MARK: - 그리기
@@ -778,6 +836,8 @@ private struct TrackEditor: View {
                     didMoveKeyframe = false
                     createdKeyframeInGesture = false
                     blankTapTime = nil
+                    // 이 동작이 끝날 때까지는 축을 확장된 상태로 유지한다.
+                    dragDisplayRange = automaticDisplayRange
                     // 빈 곳은 편집하지 않는다. 실제 곡선 위에서만 새 키프레임을 만든다.
                     if dragging == nil {
                         guard isNearCurve(g.startLocation, size: size) else {
@@ -814,7 +874,7 @@ private struct TrackEditor: View {
 
                 // 첫/끝 키프레임은 값만 바꾸고 시간은 고정해 트랙이 항상 클립 전체를 덮게 한다.
                 var time = min(max(Double(g.location.x / size.width), 0), 1)
-                var value = yToValue(g.location.y, size)
+                var value = valueForActiveDrag(at: g.location.y, size: size)
                 let snapped = magneticSnap(time: time, value: value, size: size)
                 time = snapped.time
                 value = snapped.value
@@ -835,6 +895,7 @@ private struct TrackEditor: View {
                 createdKeyframeInGesture = false
                 beganGraphGesture = false
                 blankTapTime = nil
+                dragDisplayRange = nil
                 if shouldCommit { onCommit() }
                 // 새 키프레임 추가/드래그는 편집 동작이다. 움직이지 않은 기존 점만 이동한다.
                 if !shouldCommit, let selectedTime { onSelectKeyframe(selectedTime) }
